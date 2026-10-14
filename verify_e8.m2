@@ -1,5 +1,6 @@
 -- Note from Oisín: This verification code was generated with Claude Code using the Opus 4.8 model.
 -- I checked it carefully, line by line, and vouch for its fidelity.
+-- The two provenance lines above describe the original version, not later edits.
 -- Self-contained Macaulay2 verifier: commutative nonassoc Q-algebra with
 -- t_4 == 0 identically AND e_8(x,y) != 0  (8-Engel does NOT follow from t_4).
 -- Run:  M2 --script verify_e8.m2
@@ -56,6 +57,13 @@ SC#(4,5) = hashTable{16 => 4/1, 15 => 1/1};
 SC#(4,6) = hashTable{18 => -6/1, 19 => -2/1, 17 => -1/1};
 SC#(4,8) = hashTable{20 => 1/2};
 SC#(4,10) = hashTable{21 => -1/4};
+-- QQ reduces fractions first; remove all factors of 2 from each denominator.
+for key in keys SC do for k in keys(SC#key) do (
+  d := denominator((SC#key)#k);
+  while d % 2 == 0 do d = d // 2;
+  if d != 1 then error "structure constant denominator is not a power of 2";
+);
+<< "PASS: structure constant denominators are powers of 2" << endl;
 mult = (u,v) -> (
   w := new MutableList from zeroV;
   for i from 0 to n-1 do if u#i != 0 then
@@ -66,11 +74,16 @@ mult = (u,v) -> (
   toList w);
 x = e 5; y = e 0;
 t4 = (a,b,c,d) -> mult(a, mult(b, mult(c, d))) + mult(a, mult(mult(b, c), d)) + mult(a, mult(mult(b, d), c)) + mult(mult(a, b), mult(c, d)) + mult(mult(a, c), mult(b, d)) + mult(mult(a, mult(b, c)), d) + mult(mult(mult(a, b), c), d) + mult(mult(mult(a, c), b), d) + mult(mult(a, d), mult(b, c)) + mult(mult(a, mult(b, d)), c) + mult(mult(mult(a, b), d), c) + mult(mult(mult(a, d), b), c) + mult(mult(a, mult(c, d)), b) + mult(mult(mult(a, c), d), b) + mult(mult(mult(a, d), c), b);
-bad = 0;
+-- t4 is symmetric and multilinear: sorted basis tuples, including
+-- repetitions, suffice by expansion in the basis and permutation symmetry.
+bad = 0; checked = 0;
 for i from 0 to n-1 do for j from i to n-1 do for k from j to n-1 do for l from k to n-1 do
-  if t4(e i, e j, e k, e l) != zeroV then bad = bad + 1;
-<< "t4 == 0 identically (sorted quadruples): " << (bad == 0) << endl;
+  (checked = checked + 1;
+   if t4(e i, e j, e k, e l) != zeroV then bad = bad + 1);
+if bad != 0 then error "t4 identity failed";
+<< "PASS: t4 = 0 on all " << checked << " sorted basis quadruples" << endl;
+-- e_0 = x; this loop performs exactly 8 multiplications by y.
 ee = x; for t from 1 to 8 do ee = mult(ee, y);
-<< "e8(x,y) = " << ee << endl;
-<< "8-Engel fails (e8 != 0): " << (ee != zeroV) << endl;
-if bad != 0 or ee == zeroV then error "8-Engel verification failed";
+expectedEngel = apply(n, k -> if k == 21 then -1/16 else 0/1);
+if ee != expectedEngel then error "incorrect exact e8 witness";
+<< "PASS: e_8(b_5,b_0) = (-1/16) b_21" << endl;

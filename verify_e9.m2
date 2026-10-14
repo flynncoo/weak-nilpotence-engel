@@ -1,5 +1,6 @@
 -- Note from Oisín: This verification code was generated with Claude Code using the Opus 4.8 model.
 -- I checked it carefully, line by line, and vouch for its fidelity.
+-- The two provenance lines above describe the original version, not later edits.
 -- Self-contained Macaulay2 verifier:  t_4(u1..u4) certificate for e_9(x,y).
 -- Run:  M2 --script verify_e9.m2
 isLeaf = t -> not instance(t, List);
@@ -13,16 +14,12 @@ substStar = (o, block) -> if isLeaf o then (if o === "*" then block else o) else
 -- the 15 arity-4 commutative shapes (int leaves 1..4)
 SHAPES = {{1,{2,{3,4}}}, {1,{{2,3},4}}, {1,{{2,4},3}}, {{1,2},{3,4}}, {{1,3},{2,4}}, {{1,{2,3}},4}, {{{1,2},3},4}, {{{1,3},2},4}, {{1,4},{2,3}}, {{1,{2,4}},3}, {{{1,2},4},3}, {{{1,4},2},3}, {{1,{3,4}},2}, {{{1,3},4},2}, {{{1,4},3},2}};
 
--- accumulate acc as MutableHashTable canonStr => QQ coeff
-acc = new MutableHashTable;
-addTerm = (key, c) -> ( if acc#?key then acc#key = acc#key + c else acc#key = c; );
--- one certificate term: coeff * context[O]( t_4(u1,u2,u3,u4) )
-doTerm = (coeff, o, u1, u2, u3, u4) -> (
-  us := hashTable{1=>u1, 2=>u2, 3=>u3, 4=>u4};
-  for sh in SHAPES do (
-    block := graft(sh, us);
-    addTerm(canonStr substStar(o, block), coeff);
-  ););
+-- Store the literal records so ALL input coefficients can be audited before
+-- any expansion or cancellation. The certificate data below are unchanged.
+certificate = {};
+doTerm = (coeff,o,u1,u2,u3,u4) -> (
+  certificate = append(certificate, {coeff,o,u1,u2,u3,u4});
+);
 
 -- 482 certificate terms
 doTerm(253/31500, {"*",{"y",{"y",{"y",{"y",{"y","x"}}}}}}, "y", "y", "y", "y");
@@ -507,6 +504,47 @@ doTerm(-11/1680, "*", "y", {"y","y"}, {"y",{"y","y"}}, {{"y","y"},{"y","x"}});
 doTerm(-1/200, {"*",{"y","y"}}, "y", {"y","y"}, {"y",{"y",{"y","y"}}}, "x");
 doTerm(-9/200, {"y",{"*","y"}}, "y", {"y","y"}, {"y",{"y",{"y","y"}}}, "x");
 doTerm(1/40, "*", "y", {"y","y"}, {"y",{"y",{"y",{"y",{"y","y"}}}}}, "x");
+
+-- Validate binary trees and count leaves (x,y,placeholder).
+leafCounts = (tree,allowStar) -> (
+  if instance(tree,List) then (
+    if #tree != 2 then error "expected a binary tree";
+    leafCounts(tree#0,allowStar) + leafCounts(tree#1,allowStar)
+  ) else if tree === "x" then {1,0,0}
+    else if tree === "y" then {0,1,0}
+    else if allowStar and tree === "*" then {0,0,1}
+    else error "invalid tree leaf"
+);
+shapeLeaves = tree -> if instance(tree,List) then (
+  if #tree != 2 then error "invalid t4 shape";
+  join(shapeLeaves(tree#0),shapeLeaves(tree#1))
+) else {tree};
+if #SHAPES != 15 or #unique apply(SHAPES,canonStr) != 15
+  or not all(SHAPES, sh -> sort(shapeLeaves sh) == {1,2,3,4})
+  then error "expected the 15 distinct labelled t4 trees";
+if #certificate != 482 then error "certificate record count differs from manuscript's 482";
+denominatorLCM = 1;
+for record in certificate do (
+  d := denominator(record#0);
+  denominatorLCM = lcm(denominatorLCM,d);
+  for p in {2,3,5,7} do while d % p == 0 do d = d // p;
+  if d != 1 then error "input certificate denominator has a prime outside {2,3,5,7}";
+  contextCounts := leafCounts(record#1,true);
+  if contextCounts#2 != 1 then error "context must contain exactly one placeholder";
+  counts := contextCounts + sum apply(drop(record,2), u -> leafCounts(u,false));
+  if counts != {1,9,1} then error "certificate consequence must have multidegree (1,9)";
+);
+<< "PASS: " << #certificate << " certificate records; valid trees, contexts and multidegree (1,9)" << endl;
+<< "PASS: all input denominators use only {2,3,5,7}; LCM = " << denominatorLCM << endl;
+-- Expand each record into all 15 labelled t4 summands, retaining multiplicity.
+-- canonStr sorts children only: it never imposes associativity.
+acc = new MutableHashTable;
+addTerm = (key,c) -> (if acc#?key then acc#key = acc#key + c else acc#key = c;);
+for record in certificate do (
+  us := hashTable{1=>record#2,2=>record#3,3=>record#4,4=>record#5};
+  for sh in SHAPES do
+    addTerm(canonStr substStar(record#1,graft(sh,us)),record#0);
+);
 
 -- drop zero coefficients
 nz = select(keys acc, k -> acc#k != 0);
